@@ -6,8 +6,8 @@ from typing import Any
 
 @dataclass
 class Downstream_cnn_args: 
-    # n_classes: int = 3
-    n_classes: int = 6
+    n_classes: int = 3
+    # n_classes: int = 6
     num_blocks: int = 4
     channels: list = field(default_factory = lambda: [64, 128, 192, 256])
     dropout_rate: float = 0.2
@@ -60,8 +60,8 @@ class LoadDataConfig:
             "ST",
         ]
     )
-    # use_superclasses: bool = True
-    use_superclasses: bool = False
+    use_superclasses: bool = True
+    # use_superclasses: bool = False
     
     with_test: bool = True
     data_frac: float = 1.0
