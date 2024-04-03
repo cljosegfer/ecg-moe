@@ -3,8 +3,6 @@ import h5py
 import pandas as pd
 import torch
 import numpy as np
-from torch.utils.data.distributed import DistributedSampler
-import time
 
 class MyDataloader:
     def __init__(
@@ -89,7 +87,6 @@ class MyDataloader:
 
         return batch_tensor
 
-
 class LoadData:
     def __init__(
         self,
@@ -107,12 +104,20 @@ class LoadData:
         random_seed,
         data_dtype,
         output_dtype,
+        use_fake_data,
+        fake_h5_path,
+        fake_csv_path,
         use_superclasses,
         block_classes,
         rhythm_classes,
         with_test,
         data_frac,
     ):
+        if use_fake_data:
+            hdf5_path = fake_h5_path
+            metadata_path = fake_csv_path
+            print("--> WARNING: USING RANDOM FAKE DATA!!")
+        
         self.hdf5_file = h5py.File(hdf5_path, "r")
         self.hdf5_path = hdf5_path
 
