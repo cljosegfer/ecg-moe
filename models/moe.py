@@ -17,6 +17,7 @@ class ResnetMoE(nn.Module):
 
     def forward(self, x):
         g = self.gate.forward(x)
+        g = torch.sigmoid(g)
         logits = [expert.forward(x) for expert in self.experts]
 
         g = g.unsqueeze(1)

@@ -7,7 +7,7 @@ import torch.nn as nn
 # # train moe setup
 model_label = 'moe'
 
-from configs.baseline import LoadDataConfig, Downstream_cnn_args
+from configs.baseline import LoadDataConfig
 from configs.moe import MoE_cnn_args
 from data.load_data import LoadData
 from models.moe import ResnetMoE
