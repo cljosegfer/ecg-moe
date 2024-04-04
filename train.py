@@ -2,9 +2,6 @@
 # # setup
 import torch
 import torch.nn as nn
-import os
-
-from tqdm import tqdm
 
 
 # # train gate setup
