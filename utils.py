@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from tqdm import tqdm
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 SIGNAL_CROP_LEN = 2560
 SIGNAL_NON_ZERO_START = 571
@@ -64,6 +65,107 @@ def eval(model, loader, criterion, device = "cuda"):
 
             log += loss.item()
     return log / len(loader)
+
+def synthesis(model, loader, thresholds = None, device = "cuda"):
+    if thresholds == None:
+        num_classes = len(loader.output_cols)
+        delta = np.arange(0, 1.01, 0.01)  # Array of thresholds from 0 to 1 with step 0.01
+        predictions = {thresh: [[] for _ in range(num_classes)] for thresh in delta}
+        true_labels_dict = [[] for _ in range(num_classes)]
+    else:
+        all_binary_results = []
+        all_true_labels = []
+    
+    model.eval()
+    with torch.no_grad():
+        for batch in tqdm(loader):
+            raw, exam_id, label = batch
+            ecg = get_inputs(raw).to(device)
+            label = label.to(device).float()
+
+            logits = model.forward(ecg)
+            probs = torch.sigmoid(logits)
+
+            if thresholds == None:
+                for class_idx in range(num_classes):
+                    for thresh in delta:
+                        predicted_binary = (probs[:, class_idx] >= thresh).float()
+                        predictions[thresh][class_idx].extend(
+                            predicted_binary.cpu().numpy()
+                        )
+                    true_labels_dict[class_idx].extend(
+                        label[:, class_idx].cpu().numpy()
+                    )
+            else:
+                binary_result = torch.zeros_like(probs)
+                for i in range(len(thresholds)):
+                    binary_result[:, i] = (
+                        probs[:, i] >= thresholds[i]
+                    ).float()
+                
+                all_binary_results.append(binary_result)
+                all_true_labels.append(label)
+    
+    if thresholds == None:
+        best_thresholds, best_f1s = find_best_thresholds(predictions, true_labels_dict, delta)
+        return best_thresholds, best_f1s
+    else:
+        all_binary_results = torch.cat(all_binary_results, dim=0)
+        all_true_labels = torch.cat(all_true_labels, dim=0)
+        return all_binary_results, all_true_labels, metrics_table(all_binary_results, all_true_labels)
+
+def find_best_thresholds(predictions, true_labels_dict, delta):
+    num_classes = len(predictions[0])
+    best_thresholds = [0.5] * num_classes
+    best_f1s = [0.0] * num_classes
+
+    for class_idx in (range(num_classes)):
+        for thresh in delta:
+            f1 = f1_score(
+                true_labels_dict[class_idx],
+                predictions[thresh][class_idx],
+                zero_division=0,
+            )
+
+            if f1 > best_f1s[class_idx]:
+                best_f1s[class_idx] = f1
+                best_thresholds[class_idx] = thresh
+    
+    return best_thresholds, best_f1s
+
+def metrics_table(all_binary_results, all_true_labels):
+    accuracy_scores = []
+    precision_scores = []
+    recall_scores = []
+    f1_scores = []
+
+    num_classes = all_binary_results.shape[-1]
+    for class_idx in range(num_classes):
+        class_binary_results = all_binary_results[:, class_idx].cpu().numpy()
+        class_true_labels = all_true_labels[:, class_idx].cpu().numpy()
+
+        accuracy = accuracy_score(class_true_labels, class_binary_results)
+        precision = precision_score(
+            class_true_labels, class_binary_results, zero_division=0
+        )
+        recall = recall_score(
+            class_true_labels, class_binary_results, zero_division=0
+        )
+        f1 = f1_score(class_true_labels, class_binary_results, zero_division=0)
+
+        accuracy_scores.append(accuracy)
+        precision_scores.append(precision)
+        recall_scores.append(recall)
+        f1_scores.append(f1)
+
+    metrics_dict = {
+        "Accuracy": accuracy_scores,
+        "Precision": precision_scores,
+        "Recall": recall_scores,
+        "F1 Score": f1_scores,
+    }
+
+    return metrics_dict
 
 def plot_log(log_trn, log_val = None, epoch = None):
     plt.figure();
