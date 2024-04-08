@@ -52,7 +52,8 @@ def train(model, loader, optimizer, criterion, device = "cuda"):
     return log
 
 def eval(model, loader, criterion, device = "cuda"):
-    log = 0
+    # log = 0
+    log = []
     model.eval()
     with torch.no_grad():
         for batch in tqdm(loader):
@@ -63,14 +64,17 @@ def eval(model, loader, criterion, device = "cuda"):
             logits = model.forward(ecg)
             loss = criterion(logits, label)
 
-            log += loss.item()
-    return log / len(loader)
+            # log += loss.item()
+            log.append(loss.item())
+    # return log / len(loader)
+    return log
 
-def synthesis(model, loader, thresholds = None, device = "cuda"):
-    if thresholds == None:
+def synthesis(model, loader, best_thresholds = None, device = "cuda"):
+    if best_thresholds == None:
         num_classes = len(loader.output_cols)
-        delta = np.arange(0, 1.01, 0.01)  # Array of thresholds from 0 to 1 with step 0.01
-        predictions = {thresh: [[] for _ in range(num_classes)] for thresh in delta}
+        print(num_classes)
+        thresholds = np.arange(0, 1.01, 0.01)  # Array of thresholds from 0 to 1 with step 0.01
+        predictions = {thresh: [[] for _ in range(num_classes)] for thresh in thresholds}
         true_labels_dict = [[] for _ in range(num_classes)]
     else:
         all_binary_results = []
@@ -83,12 +87,12 @@ def synthesis(model, loader, thresholds = None, device = "cuda"):
             ecg = get_inputs(raw).to(device)
             label = label.to(device).float()
 
-            logits = model.forward(ecg)
+            logits = model(ecg)
             probs = torch.sigmoid(logits)
 
-            if thresholds == None:
+            if best_thresholds == None:
                 for class_idx in range(num_classes):
-                    for thresh in delta:
+                    for thresh in thresholds:
                         predicted_binary = (probs[:, class_idx] >= thresh).float()
                         predictions[thresh][class_idx].extend(
                             predicted_binary.cpu().numpy()
@@ -98,29 +102,30 @@ def synthesis(model, loader, thresholds = None, device = "cuda"):
                     )
             else:
                 binary_result = torch.zeros_like(probs)
-                for i in range(len(thresholds)):
+                for i in range(len(best_thresholds)):
                     binary_result[:, i] = (
-                        probs[:, i] >= thresholds[i]
+                        probs[:, i] >= best_thresholds[i]
                     ).float()
                 
                 all_binary_results.append(binary_result)
                 all_true_labels.append(label)
     
-    if thresholds == None:
-        best_thresholds, best_f1s = find_best_thresholds(predictions, true_labels_dict, delta)
-        return best_thresholds, best_f1s
+    if best_thresholds == None:
+        best_f1s, best_thresholds = find_best_thresholds(predictions, true_labels_dict, thresholds)
+        return best_f1s, best_thresholds
     else:
         all_binary_results = torch.cat(all_binary_results, dim=0)
         all_true_labels = torch.cat(all_true_labels, dim=0)
         return all_binary_results, all_true_labels, metrics_table(all_binary_results, all_true_labels)
 
-def find_best_thresholds(predictions, true_labels_dict, delta):
+def find_best_thresholds(predictions, true_labels_dict, thresholds):
     num_classes = len(predictions[0])
+    print(num_classes)
     best_thresholds = [0.5] * num_classes
     best_f1s = [0.0] * num_classes
 
     for class_idx in (range(num_classes)):
-        for thresh in delta:
+        for thresh in thresholds:
             f1 = f1_score(
                 true_labels_dict[class_idx],
                 predictions[thresh][class_idx],
@@ -131,7 +136,7 @@ def find_best_thresholds(predictions, true_labels_dict, delta):
                 best_f1s[class_idx] = f1
                 best_thresholds[class_idx] = thresh
     
-    return best_thresholds, best_f1s
+    return best_f1s, best_thresholds
 
 def metrics_table(all_binary_results, all_true_labels):
     accuracy_scores = []
@@ -140,6 +145,7 @@ def metrics_table(all_binary_results, all_true_labels):
     f1_scores = []
 
     num_classes = all_binary_results.shape[-1]
+    print(num_classes)
     for class_idx in range(num_classes):
         class_binary_results = all_binary_results[:, class_idx].cpu().numpy()
         class_true_labels = all_true_labels[:, class_idx].cpu().numpy()
@@ -171,8 +177,10 @@ def plot_log(log_trn, log_val = None, epoch = None):
     plt.figure();
     plt.plot(log_trn);
     if log_val != None:
-        plt.axhline(y = log_val, color = 'tab:orange');
-        plt.title('trn: {}, val: {}'.format(np.mean(log_trn), log_val));
+        # plt.axhline(y = log_val, color = 'tab:orange');
+        # plt.title('trn: {}, val: {}'.format(np.mean(log_trn), log_val));
+        plt.plot(log_val);
+    plt.title('trn: {}, val: {}'.format(np.mean(log_trn), np.mean(log_val)));
     if epoch != None:
         plt.savefig('output/loss_{}.png'.format(epoch));
         plt.close();

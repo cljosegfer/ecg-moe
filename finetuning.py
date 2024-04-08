@@ -19,10 +19,11 @@ loader_config = LoadDataConfig()
 moe_config = MoE_cnn_args()
 
 dataloader = LoadData(**loader_config.__dict__)
-model = ResnetMoE(**moe_config.__dict__)
+# model = ResnetMoE(**moe_config.__dict__)
+model = torch.load('output/pretrained_moe.pt')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-EPOCHS = 5
+EPOCHS = 5 + 1
 
 
 # # train
@@ -31,7 +32,7 @@ criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
 
 log = []
-for epoch in range(EPOCHS):
+for epoch in range(5, EPOCHS):
     train_dl, val_dl = dataloader.get_train_dataloader(), dataloader.get_val_dataloader()
 
     train_log = train(model, train_dl, optimizer, criterion, device)

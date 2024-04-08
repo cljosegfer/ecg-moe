@@ -9,6 +9,8 @@ class ResnetMoE(nn.Module):
         super().__init__()
 
         self.gate = torch.load(gate_path)
+        # self.gate = ResnetBaseline(**resnet_config.__dict__)
+        # n_experts = 6
         self.experts = nn.ModuleList()
         for _ in range(n_experts):
             self.experts.append(ResnetBaseline(**resnet_config.__dict__))
