@@ -3,7 +3,7 @@ import torch
 
 from dataclasses import dataclass
 from typing import Any
-from configs.fake import Downstream_cnn_args
+from configs.baseline import Downstream_cnn_args
 
 @dataclass
 class MoE_cnn_args: 
