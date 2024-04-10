@@ -10,8 +10,9 @@ model_label = 'moe'
 from configs.baseline import LoadDataConfig
 from configs.moe import MoE_cnn_args
 from data.load_data import LoadData
-from models.moe_transfer import ResnetMoE
-from utils import train, eval, plot_log, export
+from models.moe import ResnetMoE
+# from utils import train, eval, plot_log, export
+from utils import train_conjugado, eval, plot_log, export
 
 
 # # init
@@ -35,7 +36,8 @@ log = []
 for epoch in range(EPOCHS):
     train_dl, val_dl = dataloader.get_train_dataloader(), dataloader.get_val_dataloader()
 
-    train_log = train(model, train_dl, optimizer, criterion, device)
+    # train_log = train(model, train_dl, optimizer, criterion, device)
+    train_log = train_conjugado(model, train_dl, optimizer, criterion, device)
     val_log = eval(model, val_dl, criterion, device)
     plot_log(train_log, val_log, epoch = epoch)
     export(model, model_label, epoch)

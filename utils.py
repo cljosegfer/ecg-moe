@@ -52,8 +52,8 @@ def train(model, loader, optimizer, criterion, device = "cuda"):
     return log
 
 def eval(model, loader, criterion, device = "cuda"):
-    # log = 0
-    log = []
+    log = 0
+    # log = []
     model.eval()
     with torch.no_grad():
         for batch in tqdm(loader):
@@ -64,10 +64,10 @@ def eval(model, loader, criterion, device = "cuda"):
             logits = model.forward(ecg)
             loss = criterion(logits, label)
 
-            # log += loss.item()
-            log.append(loss.item())
-    # return log / len(loader)
-    return log
+            log += loss.item()
+            # log.append(loss.item())
+    return log / len(loader)
+    # return log
 
 def synthesis(model, loader, best_thresholds = None, device = "cuda"):
     if best_thresholds == None:
@@ -177,9 +177,9 @@ def plot_log(log_trn, log_val = None, epoch = None):
     plt.figure();
     plt.plot(log_trn);
     if log_val != None:
-        # plt.axhline(y = log_val, color = 'tab:orange');
-        # plt.title('trn: {}, val: {}'.format(np.mean(log_trn), log_val));
-        plt.plot(log_val);
+        plt.axhline(y = log_val, color = 'tab:orange');
+        plt.title('trn: {}, val: {}'.format(np.mean(log_trn), log_val));
+        # plt.plot(log_val);
     plt.title('trn: {}, val: {}'.format(np.mean(log_trn), np.mean(log_val)));
     if epoch != None:
         plt.savefig('output/loss_{}.png'.format(epoch));
@@ -190,3 +190,51 @@ def plot_log(log_trn, log_val = None, epoch = None):
 def export(model, model_label, epoch):
     print('exporting partial model at epoch {}'.format(epoch))
     torch.save(model, 'output/partial_{}.pt'.format(model_label))
+
+def get_inputs_conjugado(batch, label, apply = "non_zero", device = "cuda"):
+    # (B, C, L)
+    if batch.shape[1] > batch.shape[2]:
+        batch = batch.permute(0, 2, 1)
+
+    B, n_leads, signal_len = batch.shape
+
+    if apply == "non_zero":
+        transformed_data = torch.zeros(B, n_leads, SIGNAL_CROP_LEN)
+        for b in range(B):
+            start = SIGNAL_NON_ZERO_START
+            diff = signal_len - start
+            if start > diff:
+                correction = start - diff
+                start -= correction
+            end = start + SIGNAL_CROP_LEN
+            for l in range(n_leads):
+                transformed_data[b, l, :] = batch[b, l, start:end]
+
+    else:
+        transformed_data = batch
+    
+    block = torch.tensor([label[i, :3].any() for i in range(label.shape[0])])
+    rhythm = torch.tensor([label[i, 3:].any() for i in range(label.shape[0])])
+    normal = torch.tensor([not label[i, :].any() for i in range(label.shape[0])])
+    superlabel = torch.stack((block, rhythm, normal)).T
+
+    return transformed_data.to(device), superlabel.to(device).float()
+
+def train_conjugado(model, loader, optimizer, criterion, device = "cuda"):
+    log = []
+    model.train()
+    for batch in tqdm(loader):
+        raw, exam_id, label = batch
+        ecg, superlabel = get_inputs_conjugado(raw, label)
+        label = label.to(device).float()
+
+        logits = model.forward(ecg)
+        g = model.gate.forward(ecg)
+        loss = criterion(logits, label) + criterion(g, superlabel)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        log.append(loss.item())
+    return log
